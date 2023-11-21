@@ -67,7 +67,7 @@ void loop() {
         findSignalAllMics();
         getServoAngle();
         start_time = millis();
-  }
+    }
 }
 
 /**
@@ -147,6 +147,9 @@ void findSignal(const int micNumber) {
     }
 }
 
+/**
+ * Read mic input from analog pins
+*/
 void readMics() {
     mic[0] = analogRead(SENSOR_PIN_ONE);
     mic[1] = analogRead(SENSOR_PIN_TWO);
@@ -155,6 +158,9 @@ void readMics() {
     mic[4] = analogRead(SENSOR_PIN_FIVE);
 }
 
+/**
+ * Sets model input tensor for model inference
+*/
 void setModelInput() {
     input->data.f[0] = yn_current[0];
     input->data.f[1] = yn_current[1];
@@ -163,6 +169,11 @@ void setModelInput() {
     input->data.f[4] = yn_current[4];
 }
 
+/**
+ * This function runs model inference to obtain an 
+ * appropriate servo motor angle and calls another
+ * function to handle the servo rotation
+*/
 void getServoAngle() {
     setModelInput(); // Update input to model
 
@@ -176,6 +187,10 @@ void getServoAngle() {
     handleServo(servoAngle); // Rotate servo
 }
 
+/**
+ * @param servoAngle - angle to rotate servo to
+ * This function rotates the servo to the appropriate angle
+*/
 void handleServo(const float servoAngle) {
     servoMotor.write(servoAngle);
 }
