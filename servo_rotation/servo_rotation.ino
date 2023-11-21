@@ -14,7 +14,7 @@ namespace {
   TfLiteTensor* input = nullptr; // Get pointer for model input tensor
   TfLiteTensor* output = nullptr; // Get pointer for model output tensor
 
-  constexpr int kTensorArenaSize = 136 * 1024; // Need enough bytes for model
+  constexpr int kTensorArenaSize = 64 * 1024; // Need enough bytes for model
   alignas(16) uint8_t tensor_arena[kTensorArenaSize];
 }
 
@@ -47,9 +47,6 @@ float yn1[NUMBER_MICROPHONES]        = {0.0, 0.0, 0.0, 0.0, 0.0};
 Servo servoMotor;
 
 boolean filterFlag  = 1;
-
-int servoMotorAngle = 0;
-int potReading;
 
 unsigned long now;
 unsigned long start_time;
