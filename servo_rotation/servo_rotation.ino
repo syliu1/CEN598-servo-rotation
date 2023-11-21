@@ -1,5 +1,23 @@
 #include <Servo.h>
 
+#include <TensorFlowLite.h>
+#include "tensorflow/lite/micro/all_ops_resolver.h"
+#include "tensorflow/lite/micro/tflite_bridge/micro_error_reporter.h"
+#include "tensorflow/lite/micro/micro_interpreter.h"
+#include "tensorflow/lite/micro/micro_log.h"
+#include "tensorflow/lite/micro/system_setup.h"
+#include "tensorflow/lite/schema/schema_generated.h"
+
+namespace {
+  const tflite::Model* model = nullptr; // Set TensorFlow model pointer
+  tflite::MicroInterpreter* interpreter = nullptr; // Set TensorFlow interpreter pointer
+  TfLiteTensor* input = nullptr; // Get pointer for model input tensor
+  TfLiteTensor* output = nullptr; // Get pointer for model output tensor
+
+  constexpr int kTensorArenaSize = 136 * 1024; // Need enough bytes for model
+  alignas(16) uint8_t tensor_arena[kTensorArenaSize];
+}
+
 const int SENSOR_PIN_ONE       = A0;  // Analog input pin
 const int SENSOR_PIN_TWO       = A1;
 const int SENSOR_PIN_THREE     = A2; 
@@ -38,37 +56,63 @@ unsigned long start_time;
 
 void setup() {
     Serial.begin(BAUD_RATE);
-    servoMotor1.attach(SERVO_PIN);
+    servoMotor.attach(SERVO_PIN);
     start_time = millis();
+    initTensorFlow();
 }
 
 void loop() {
     readMics();
-
-    for(int i=0; i < NUMBER_MICROPHONES; i++) {
-        findSignalMaxMin(i);
-    }
+    findSignalMaxMinAllMics();
 
     now = millis();
     if ((now - start_time) >= (sampleWindow * 1000)) {
-        for(int i=0; i < NUMBER_MICROPHONES; i++) {
-            findSignal(i);
-            signalMax[i] = SIGNAL_MIN;
-            signalMin[i] = SIGNAL_MAX;
-        }
-
-        Serial.print(yn_current[0]);
-        Serial.print(",");
-        Serial.print(yn_current[1]);
-        Serial.print(",");
-        Serial.print(yn_current[2]);
-        Serial.print(",");
-        Serial.print(yn_current[3]);
-        Serial.print(",");
-        Serial.print(yn_current[4]);
-        Serial.print(",");
+        findSignalAllMics();
+        getServoAngle();
         start_time = millis();
   }
+}
+
+/**
+* This function initializes everything needed to run the TensorFlow Lite model
+*/
+void initTensorFlow() {
+  tflite::InitializeTarget();
+
+  // Construct model from byte array
+  model = tflite::GetModel(servoModel);
+  if (model->version() != TFLITE_SCHEMA_VERSION) {
+    MicroPrintf(
+        "Model provided is schema version %d not equal "
+        "to supported version %d.",
+        model->version(), TFLITE_SCHEMA_VERSION);
+    return;
+  }
+
+  // Get all operations
+  static tflite::AllOpsResolver resolver;
+
+  // Build an interpreter to run model with
+  static tflite::MicroInterpreter static_interpreter(
+      model, resolver, tensor_arena, kTensorArenaSize);
+  interpreter = &static_interpreter;
+
+  // Allocate memory from tensor_arena for model's tensors.
+  TfLiteStatus allocate_status = interpreter->AllocateTensors();
+  if (allocate_status != kTfLiteOk) {
+    MicroPrintf("AllocateTensors() failed");
+    return;
+  }
+
+  // Get pointers to the model's input and output tensors.
+  input = interpreter->input(0);
+  output = interpreter->output(0);
+}
+
+void findSignalMaxMinAllMics() {
+    for(int i=0; i < NUMBER_MICROPHONES; i++) {
+        findSignalMaxMin(i);
+    }
 }
 
 void findSignalMaxMin(const int micNumber) {
@@ -78,6 +122,14 @@ void findSignalMaxMin(const int micNumber) {
         } else if (mic[micNumber] < signalMin[micNumber]) {
             signalMin[micNumber] = mic[micNumber];
         }
+    }
+}
+
+void findSignalAllMics() {
+    for(int i=0; i < NUMBER_MICROPHONES; i++) {
+        findSignal(i);
+        signalMax[i] = SIGNAL_MIN;
+        signalMin[i] = SIGNAL_MAX;
     }
 }
 
@@ -104,4 +156,30 @@ void readMics() {
     mic[2] = analogRead(SENSOR_PIN_THREE);
     mic[3] = analogRead(SENSOR_PIN_FOUR);
     mic[4] = analogRead(SENSOR_PIN_FIVE);
+}
+
+void setModelInput() {
+    input->data.f[0] = yn_current[0];
+    input->data.f[1] = yn_current[1];
+    input->data.f[2] = yn_current[2];
+    input->data.f[3] = yn_current[3];
+    input->data.f[4] = yn_current[4];
+    input->data.f[5] = yn_current[5];
+}
+
+void getServoAngle() {
+    setModelInput(); // Update input to model
+
+    TfLiteStatus invoke_status = interpreter->Invoke(); // Run inference
+    if (invoke_status != kTfLiteOk) {
+        Serial.println("Invoke Failed");
+        return;
+    }
+
+    const float servoAngle = output->data.f[0]; // Get regression result
+    handleServo(servoAngle); // Rotate servo
+}
+
+void handleServo(const float servoAngle) {
+    servoMotor.write(servoAngle);
 }
