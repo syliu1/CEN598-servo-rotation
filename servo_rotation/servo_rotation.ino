@@ -161,7 +161,6 @@ void setModelInput() {
     input->data.f[2] = yn_current[2];
     input->data.f[3] = yn_current[3];
     input->data.f[4] = yn_current[4];
-    input->data.f[5] = yn_current[5];
 }
 
 void getServoAngle() {
