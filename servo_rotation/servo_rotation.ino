@@ -65,7 +65,8 @@ void loop() {
     now = millis();
     if ((now - start_time) >= (sampleWindow * 1000)) {
         findSignalAllMics();
-        getServoAngle();
+        const float servoAngle = getServoAngle();
+        handleServo(servoAngle); // Rotate servo
         start_time = millis();
     }
 }
@@ -107,7 +108,7 @@ void initTensorFlow() {
 }
 
 void findSignalMaxMinAllMics() {
-    for(int i=0; i < NUMBER_MICROPHONES; i++) {
+    for (int i=0; i < NUMBER_MICROPHONES; i++) {
         findSignalMaxMin(i);
     }
 }
@@ -123,7 +124,7 @@ void findSignalMaxMin(const int micNumber) {
 }
 
 void findSignalAllMics() {
-    for(int i=0; i < NUMBER_MICROPHONES; i++) {
+    for (int i=0; i < NUMBER_MICROPHONES; i++) {
         findSignal(i);
         signalMax[i] = SIGNAL_MIN;
         signalMin[i] = SIGNAL_MAX;
@@ -184,7 +185,7 @@ void getServoAngle() {
     }
 
     const float servoAngle = output->data.f[0]; // Get regression result
-    handleServo(servoAngle); // Rotate servo
+    return servoAngle;
 }
 
 /**
